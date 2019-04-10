@@ -214,6 +214,8 @@ inode_t vfs_get_inode(vfs_t vfs, int16_t inode_number)
     // visit page pointed to by dense index
     // go to inode offset on page
     *inode = vfs_get_inode_page(vfs, page_number, inode_number % 16);
+
+    return inode;
 }
 
 uint16_t vfs_new_inode(vfs_t vfs, int32_t flags)
