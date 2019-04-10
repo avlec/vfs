@@ -1,6 +1,11 @@
 <component name="ProjectDictionaryState">
   <dictionary name="avlec">
     <words>
+      <w>fread</w>
+      <w>fseek</w>
+      <w>fwrite</w>
+      <w>inode</w>
+      <w>inodes</w>
       <w>vdisk</w>
     </words>
   </dictionary>
