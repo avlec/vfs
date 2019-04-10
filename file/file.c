@@ -141,10 +141,23 @@ void file_open(vfs_t vfs, char * filepath)
 
 }
 
+void file_close(file_t file)
+{
+    file->vfs = NULL;
+    free(file->name);
+    file->inode_number = 0;
+    free(file->inode);
+    free(file->path);
+    free(file);
+}
+
 int main() {
     vfs_t vfs = vfs_open("vdisk.img");
 
     file_t file = file_create(vfs, "/avlec");
 
+    file_close(file);
+
+    vfs_close(vfs);
     return EXIT_SUCCESS;
 }
