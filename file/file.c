@@ -22,20 +22,26 @@ struct directory {
 };
 typedef struct directory * directory_t;
 
-uint16_t * build_page_map(vfs_t vfs, inode_t inode)
+struct page_map {
+    uint16_t * pages;
+    uint32_t page_count;
+};
+
+struct page_map build_page_map(vfs_t vfs, inode_t inode)
 {
+    struct page_map page_map = {};
     // count full pages, and add an extra page for an unfilled page.
-    uint32_t page_count = inode->file_size / 512 + ((inode->file_size % 512 == 0) ? 0 : 1);
-    uint16_t * page_map = calloc(page_count, sizeof(int16_t));
+    page_map.page_count = inode->file_size / 512 + ((inode->file_size % 512 == 0) ? 0 : 1);
+    page_map.pages = calloc(page_map.page_count, sizeof(int16_t));
 
-    printf("page map for %d pages\r\n", page_count);
+    printf("page map for %d pages\r\n", page_map.page_count);
 
-    for(int i = 0; i < ((page_count < 10) ? page_count : 10); ++i)
+    for(int i = 0; i < ((page_map.page_count < 10) ? page_map.page_count : 10); ++i)
     {
-        page_map[i] = inode->d_pages[i];
+        page_map.pages[i] = inode->d_pages[i];
     }
 
-    if (page_count > 10)
+    if (page_map.page_count > 10)
     {
         // TODO add all single indirect pages and double indirect pages
     }
@@ -53,7 +59,7 @@ directory_t directory_open(vfs_t vfs, char * path)
     char * token = strtok(path, "/");
     uint16_t current_inode = 0;
     inode_t current_dir = vfs_get_inode(vfs, current_inode);
-    uint16_t * current_dir_page_map = build_page_map(vfs, current_dir);
+    struct page_map current_dir_page_map = build_page_map(vfs, current_dir);
     while(token != NULL)
     {
         memset(dir->name, 0, 31);
@@ -62,12 +68,12 @@ directory_t directory_open(vfs_t vfs, char * path)
         // search in the pages of current_dir for
         // the entry matching token
         // if found update current dir
-        free(current_dir_page_map);
+        free(current_dir_page_map.pages);
         current_dir_page_map = build_page_map(vfs, current_dir);
 
         token = strtok(NULL, "/");
     }
-    free(current_dir_page_map);
+    free(current_dir_page_map.pages);
 
     dir->inode_number = current_inode;
     dir->inode = current_dir;
@@ -82,6 +88,69 @@ void directory_close(directory_t dir)
     free(dir->name);
     free(dir->path);
     free(dir);
+}
+
+void directory_add(directory_t dir, file_t file)
+{
+    struct page_map page_map = build_page_map(dir->vfs, dir->inode);
+
+    // can we hold the entry in the number of pages we have?
+    if (dir->inode->file_size < page_map.page_count * VFS_PAGE_SIZE)
+    {
+        // we got room
+        if(fseek(dir->vfs->vdisk, page_map.pages[page_map.page_count - 1] * VFS_PAGE_SIZE + (dir->inode->file_size / 32) % 16, SEEK_SET) != 0)
+        {
+            ERR("fseek() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+
+        if(fwrite(&file->inode_number, sizeof(file->inode_number), 1, dir->vfs->vdisk) != 1)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+
+        if(fwrite(file->name, sizeof(*file->name), 30, dir->vfs->vdisk) != 1)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        // we need room
+        uint16_t new_page = vfs_allocate_new_page(dir->vfs);
+        printf("KILL ME%d\r\n", page_map.pages[page_map.page_count - 1]);
+        if(fseek(dir->vfs->vdisk, page_map.pages[page_map.page_count - 1] * VFS_PAGE_SIZE + (dir->inode->file_size / 32) % 16, SEEK_SET) != 0)
+        {
+            ERR("fseek() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+
+        if(fwrite(&file->inode_number, sizeof(file->inode_number), 1, dir->vfs->vdisk) != 1)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+
+
+        if(fwrite(file->name, sizeof(*file->name), 30, dir->vfs->vdisk) != 30)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+
+        dir->inode->d_pages[dir->inode->file_size / 16] = new_page;
+    }
+
+    dir->inode->file_size += 32;
+    vfs_update_inode(dir->vfs, dir->inode, dir->inode_number);
 }
 
 file_t file_create(vfs_t vfs, char * file_path)
@@ -130,7 +199,7 @@ file_t file_create(vfs_t vfs, char * file_path)
     // add directory entry
     directory_t dir = directory_open(vfs, directory_path);
 
-    //directory_add(dir, new_file);
+    directory_add(dir, new_file);
 
     directory_close(dir);
     return new_file;
@@ -154,9 +223,8 @@ void file_close(file_t file)
 int main() {
     vfs_t vfs = vfs_open("vdisk.img");
 
-    file_t file = file_create(vfs, "/avlec");
-
-    file_close(file);
+    file_close(file_create(vfs, "/avlec"));
+    file_close(file_create(vfs, "/avlec"));
 
     vfs_close(vfs);
     return EXIT_SUCCESS;

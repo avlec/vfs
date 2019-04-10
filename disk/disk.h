@@ -29,6 +29,7 @@
 #define VFS_DATA_START_BLOCK (VFS_TOTAL_RESERVED_BLOCK_COUNT)
 #define VFS_PAGE_START_OFFSET (VFS_RESERVED_BLOCK_COUNT * VFS_PAGE_SIZE)
 
+#define ERR(x) fprintf(stderr, "Error in %s at line %d in %s:\r\n\t%s\r\n", __func__, __LINE__, __FILE__, x)
 
 struct vfs {
     FILE * vdisk;
@@ -70,6 +71,8 @@ void vfs_page_write(vfs_t vfs, uint16_t page_number, int8_t * buffer, int16_t bu
 void vfs_add_inode_page(vfs_t vfs, inode_t inode, uint16_t page_number, uint16_t page_index);
 
 uint16_t vfs_allocate_new_page(vfs_t vfs);
+
+void vfs_update_inode(vfs_t vfs, inode_t inode, uint16_t inode_number);
 
 inode_t vfs_get_inode(vfs_t vfs, int16_t inode_number);
 

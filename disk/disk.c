@@ -6,8 +6,6 @@
 
 #include "disk.h"
 
-#define ERR(x) fprintf(stderr, "Error in %s at line %d in %s:\r\n\t%s\r\n", __func__, __LINE__, __FILE__, x)
-
 int8_t vfs_page_free_check(vfs_t vfs, uint16_t page_number)
 {
     // Create the bit mask
@@ -187,11 +185,31 @@ uint16_t vfs_allocate_new_page(vfs_t vfs)
 
     uint16_t allocated_page_index = first_free_blocks * 8 + bit_offset;
 
+    // mark page as taken
     vfs_page_free_mark(vfs, allocated_page_index);
+
+    // populate page with zeros
+    if(fseek(vfs->vdisk, allocated_page_index * VFS_PAGE_SIZE, SEEK_SET) != 0)
+    {
+        ERR("fseek() result doesn't match requested.\r\n\t"
+            "Exiting.");
+        exit(EXIT_FAILURE);
+    }
+    uint8_t zeros[VFS_PAGE_SIZE] = {};
+    if(fwrite(zeros, sizeof(*zeros), sizeof(zeros), vfs->vdisk) != sizeof(zeros))
+    {
+        ERR("fwrite() result doesn't match requested.\r\n\t"
+            "Exiting");
+        exit(EXIT_FAILURE);
+    }
 
     return allocated_page_index;
 }
 
+void vfs_update_inode(vfs_t vfs, inode_t inode, uint16_t inode_number)
+{
+
+}
 inode_t vfs_get_inode(vfs_t vfs, int16_t inode_number)
 {
     inode_t inode = (inode_t) malloc(sizeof(struct inode));
