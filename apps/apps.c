@@ -12,7 +12,13 @@ int main() {
 
     file_t avlec = file_open(vfs, "/home/avlec");
 
-    file_write("this is garbage", sizeof(char), sizeof("this is garbage"), avlec);
+    char buffer1[512] = "this is garbage";
+    file_write(buffer1, sizeof(*buffer1), sizeof(buffer1)/sizeof(*buffer1), avlec);
+
+    file_rewind(avlec);
+
+    char buffer2 [512] = {};
+    file_read(buffer2, sizeof(*buffer2), sizeof(buffer2)/sizeof(*buffer2), avlec);
 
     file_close(avlec);
 

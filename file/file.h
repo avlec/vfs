@@ -38,6 +38,7 @@ file_t file_create(vfs_t vfs, char * file_path);
 file_t file_open(vfs_t vfs, char * filepath);
 size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file);
 size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file);
+size_t file_rewind(file_t avlec);
 void file_close(file_t file);
 
 #endif

@@ -542,3 +542,11 @@ size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file)
     // Now we have a contiguous section of storage in page_contents
     return copying_byte_count;
 }
+
+size_t file_rewind(file_t file)
+{
+    size_t rewind_amount = file->cursor_page * VFS_PAGE_SIZE + file->cursor_page_pos;
+    file->cursor_page = 0;
+    file->cursor_page_pos = 0;
+    return rewind_amount;
+}
