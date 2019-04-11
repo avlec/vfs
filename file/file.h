@@ -7,12 +7,12 @@ struct page_map {
     uint16_t * pages;
     uint32_t page_count;
 };
-typedef struct page_map * page_map_t;
+typedef struct page_map page_map;
 
 struct file {
     vfs_t vfs;
     uint16_t inode_number;
-    page_map_t page_map;
+    page_map pagemap;
     uint16_t cursor_page;
     uint16_t cursor_page_pos;
     inode_t inode;
@@ -36,8 +36,8 @@ void directory_close(directory_t dir);
 
 file_t file_create(vfs_t vfs, char * file_path);
 file_t file_open(vfs_t vfs, char * filepath);
-size_t file_read(void * dest, size_t size, size_t count, file_t file);
-size_t file_write(void * src, size_t size, size_t count, file_t file);
+size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file);
+size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file);
 void file_close(file_t file);
 
 #endif
