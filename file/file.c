@@ -4,29 +4,6 @@
 
 #include "file.h"
 
-struct file {
-    vfs_t vfs;
-    uint16_t inode_number;
-    inode_t inode;
-    char * name;
-    char * path;
-};
-typedef struct file * file_t;
-
-struct directory {
-    vfs_t vfs;
-    uint16_t inode_number;
-    inode_t inode;
-    char * name;
-    char * path;
-};
-typedef struct directory * directory_t;
-
-struct page_map {
-    uint16_t * pages;
-    uint32_t page_count;
-};
-
 struct page_map build_page_map(vfs_t vfs, inode_t inode)
 {
     struct page_map page_map = {};
@@ -73,15 +50,22 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
     return page_map;
 }
 
-directory_t directory_open(vfs_t vfs, char * path)
+struct result {
+    uint16_t inode_number;
+    uint8_t name[30];
+};
+
+directory_t directory_open(vfs_t vfs, char * directory_path)
 {
     directory_t dir = (directory_t) malloc(sizeof(struct directory));
+    // Stuff that doesn't change with loop.
     dir->vfs = vfs;
-    dir->path = (char *) calloc(strlen(path) + 1, sizeof(char));
-    memcpy(dir->path, path, strlen(path));
+    dir->path = (char *) calloc(strlen(directory_path) + 1, sizeof(char));
+    memcpy(dir->path, directory_path, strlen(directory_path));
     dir->name = (char *) calloc(31, sizeof(char));
 
-    char * token = strtok(path, "/");
+    // Stuff that changes with loop.
+    char * token = strtok(directory_path, "/");
     uint16_t current_inode = 0;
     inode_t current_dir = vfs_get_inode(vfs, current_inode);
     struct page_map current_dir_page_map = build_page_map(vfs, current_dir);
@@ -90,18 +74,56 @@ directory_t directory_open(vfs_t vfs, char * path)
         memset(dir->name, 0, 31);
         memcpy(dir->name, token, strlen(token));
 
+        bool found = false;
+
         // search in the pages of current_dir for
+        for(int i = 0; i < current_dir_page_map.page_count && !found; ++i) {
+            // Read page at pages[i]
+            if (fseek(vfs->vdisk, current_dir_page_map.pages[i] * VFS_PAGE_SIZE, SEEK_SET) != 0)
+            {
+                ERR("fseek() result doesn't match requested.\r\n\t"
+                    "Exiting.");
+                exit(EXIT_FAILURE);
+            }
+
+            // read each entry in the page.
+            for(int j = 0; j < 16 && !found; ++j)
+            {
+                uint16_t read_inode = 0;
+                char  name[30] = {};
+                if(fread(&read_inode, sizeof(read_inode), 1, vfs->vdisk) != 1)
+                {
+                    ERR("fread() result doesn't match requested.\r\n\t"
+                        "Exiting.");
+                    exit(EXIT_FAILURE);
+                }
+                if(fread(name, sizeof(*name), sizeof(name), vfs->vdisk) != sizeof(name))
+                {
+                    ERR("fread() result doesn't match requested.\r\n\t"
+                        "Exiting.");
+                    exit(EXIT_FAILURE);
+                }
+
+                // compare name with token
+                if(strncmp(token, name, sizeof(token)) == 0) {
+                    found = true;
+                    current_inode = read_inode;
+                    current_dir = vfs_get_inode(vfs, current_inode);
+                    free(current_dir_page_map.pages);
+                    current_dir_page_map = build_page_map(vfs, current_dir);
+                }
+            }
+        }
         // the entry matching token
         // if found update current dir
-        free(current_dir_page_map.pages);
-        current_dir_page_map = build_page_map(vfs, current_dir);
 
         token = strtok(NULL, "/");
     }
-    free(current_dir_page_map.pages);
 
     dir->inode_number = current_inode;
     dir->inode = current_dir;
+
+    free(current_dir_page_map.pages);
     return dir;
 }
 
@@ -193,7 +215,7 @@ directory_t directory_create(vfs_t vfs, char * directory_path)
     directory_t dir = (directory_t) malloc(sizeof(struct directory));
     dir->vfs = vfs;
     // create and store new inode
-    dir->inode_number =  vfs_new_file_inode(vfs);
+    dir->inode_number =  vfs_new_dir_inode(vfs);
     // get inode
     dir->inode = vfs_get_inode(vfs, dir->inode_number);
 
@@ -382,15 +404,4 @@ void file_close(file_t file)
     file->path = NULL;
 
     free(file);
-}
-
-int main() {
-    vfs_t vfs = vfs_open("vdisk.img");
-
-    directory_close(directory_create(vfs, "/home"));
-    file_close(file_create(vfs, "/avlec"));
-    file_close(file_create(vfs, "/alec"));
-
-    vfs_close(vfs);
-    return EXIT_SUCCESS;
 }
