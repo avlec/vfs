@@ -11,7 +11,7 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
     page_map.page_count = inode->file_size / 512 + ((inode->file_size % 512 == 0) ? 0 : 1);
     page_map.pages = calloc(page_map.page_count, sizeof(int16_t));
 
-    printf("page map for %d pages\r\n", page_map.page_count);
+    //printf("page map for %d pages\r\n", page_map.page_count);
 
     for(int i = 0; i < ((page_map.page_count < 10) ? page_map.page_count : 10); ++i)
     {
@@ -50,10 +50,43 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
     return page_map;
 }
 
-struct result {
-    uint16_t inode_number;
-    uint8_t name[30];
-};
+uint16_t directory_get_inode_number(directory_t dir, char *entry_name)
+{
+    // create a page map.
+    struct page_map pagemap = build_page_map(dir->vfs, dir->inode);
+
+    for(int i = 0; i < pagemap.page_count; ++i) {
+        if(fseek(dir->vfs->vdisk, pagemap.pages[i] * VFS_PAGE_SIZE, SEEK_SET) != 0)
+        {
+            ERR("fseek() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+
+        for(int j = 0; j < 16; ++j) {
+            uint16_t read_inode = 0;
+            char  name[31] = {};
+            if(fread(&read_inode, sizeof(read_inode), 1, dir->vfs->vdisk) != 1)
+            {
+                ERR("fread() result doesn't match requested.\r\n\t"
+                    "Exiting.");
+                exit(EXIT_FAILURE);
+            }
+            if(fread(name, sizeof(*name), sizeof(name), dir->vfs->vdisk) != sizeof(name))
+            {
+                ERR("fread() result doesn't match requested.\r\n\t"
+                    "Exiting.");
+                exit(EXIT_FAILURE);
+            }
+
+            if(strncmp(entry_name, name, sizeof(name)-1) == 0) {
+                return read_inode;
+            }
+        }
+    }
+    return 0;
+}
+
 
 directory_t directory_open(vfs_t vfs, char * directory_path)
 {
@@ -90,14 +123,14 @@ directory_t directory_open(vfs_t vfs, char * directory_path)
             for(int j = 0; j < 16 && !found; ++j)
             {
                 uint16_t read_inode = 0;
-                char  name[30] = {};
+                char  name[31] = {};
                 if(fread(&read_inode, sizeof(read_inode), 1, vfs->vdisk) != 1)
                 {
                     ERR("fread() result doesn't match requested.\r\n\t"
                         "Exiting.");
                     exit(EXIT_FAILURE);
                 }
-                if(fread(name, sizeof(*name), sizeof(name), vfs->vdisk) != sizeof(name))
+                if(fread(name, sizeof(*name), sizeof(name)-1, vfs->vdisk) != sizeof(name) - 1)
                 {
                     ERR("fread() result doesn't match requested.\r\n\t"
                         "Exiting.");
@@ -105,7 +138,7 @@ directory_t directory_open(vfs_t vfs, char * directory_path)
                 }
 
                 // compare name with token
-                if(strncmp(token, name, sizeof(token)) == 0) {
+                if(strncmp(token, name, strlen(token)) == 0) {
                     found = true;
                     current_inode = read_inode;
                     current_dir = vfs_get_inode(vfs, current_inode);
@@ -334,6 +367,10 @@ file_t file_create(vfs_t vfs, char * file_path)
     new_file->inode_number =  vfs_new_file_inode(vfs);
     // get inode
     new_file->inode = vfs_get_inode(vfs, new_file->inode_number);
+    // Reset file cursor
+    new_file->pagemap = build_page_map(vfs, new_file->inode);
+    new_file->cursor_page = 0;
+    new_file->cursor_page_pos = 0;
 
     // parse filepath
     // build directory path
@@ -378,9 +415,65 @@ file_t file_create(vfs_t vfs, char * file_path)
     return new_file;
 }
 
-file_t file_open(vfs_t vfs, char * filepath)
+file_t file_open(vfs_t vfs, char * file_path)
 {
-    file_t file = (file_t) malloc(sizeof(struct file));
+    file_t file = (file_t) calloc(1, sizeof(struct file));
+    file->vfs = vfs;
+
+    // Find the file to get inode_number
+    // use inode number to get inode
+    // use inode to build pagemap
+
+    // parse filepath
+    // build directory path
+    // get filename
+    size_t string_length = strlen(file_path) + 1;
+    file->path = (char *) malloc(sizeof(char) * string_length);
+    memcpy(file->path, file_path, string_length);
+
+    // Initialize '\0' filled strings so we can copy to them and not worry about adding
+    // a single '\0' at the end
+    file->name = (char *) calloc(31, sizeof(char));
+    char * absolute_path = (char *) calloc(string_length, sizeof(char));
+
+
+    // find index of last `/`
+    int last_slash = -1;
+    for(int i = 0; i < string_length - 1; ++i)
+    {
+        if (file_path[i] == '/') {
+            // This ignores slashes with multiple `/`'s in a row
+            if (i != 0)
+                if (file_path[i - 1] == '/')
+                    continue;
+            if (i != string_length - 1)
+                if (file_path[i + 1] == '/')
+                    continue;
+            last_slash = i + 1;
+        }
+    }
+
+    memcpy(absolute_path, file_path, last_slash);
+    memcpy(file->name, file_path+last_slash, string_length - last_slash);
+
+    printf("file_path %s, directory path %s, file_name %s\r\n", file->path, absolute_path, file->name);
+
+    directory_t parent_dir = directory_open(vfs, absolute_path);
+
+    file->inode_number = directory_get_inode_number(parent_dir, file->name);
+
+    directory_close(parent_dir);
+
+    if(file->inode_number == 0)
+    {
+        file_close(file);
+        return NULL;
+    }
+
+    file->inode = vfs_get_inode(vfs, file->inode_number);
+    file->pagemap = build_page_map(vfs, file->inode);
+    file->cursor_page = 0;
+    file->cursor_page_pos = 0;
 
     return file;
 }
@@ -393,6 +486,12 @@ void file_close(file_t file)
         free(file->name);
     file->name = NULL;
 
+    file->pagemap.page_count = 0;
+    if(file->pagemap.pages != NULL)
+        free(file->pagemap.pages);
+    file->cursor_page_pos = 0;
+    file->cursor_page = 0;
+
     file->inode_number = 0;
 
     if(file->inode != NULL)
@@ -404,4 +503,16 @@ void file_close(file_t file)
     file->path = NULL;
 
     free(file);
+}
+
+size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file)
+{
+    // assuming only concatenation to files.
+    // every write always allocates new blocks on the end
+    return 0;
+}
+
+size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file)
+{
+    return 0;
 }
