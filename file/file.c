@@ -4,7 +4,7 @@
 
 #include "file.h"
 
-struct page_map build_page_map(vfs_t vfs, inode_t inode)
+struct page_map build_page_map(inode_t inode)
 {
     struct page_map page_map = {};
     // count full pages, and add an extra page for an unfilled page.
@@ -53,7 +53,7 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
 uint16_t directory_get_inode_number(directory_t dir, char *entry_name)
 {
     // create a page map.
-    struct page_map pagemap = build_page_map(dir->vfs, dir->inode);
+    struct page_map pagemap = build_page_map(dir->inode);
 
     for(int i = 0; i < pagemap.page_count; ++i) {
         if(fseek(dir->vfs->vdisk, pagemap.pages[i] * VFS_PAGE_SIZE, SEEK_SET) != 0)
@@ -101,7 +101,7 @@ directory_t directory_open(vfs_t vfs, char * directory_path)
     char * token = strtok(directory_path, "/");
     uint16_t current_inode = 0;
     inode_t current_dir = vfs_get_inode(vfs, current_inode);
-    struct page_map current_dir_page_map = build_page_map(vfs, current_dir);
+    struct page_map current_dir_page_map = build_page_map(current_dir);
     while(token != NULL)
     {
         memset(dir->name, 0, 31);
@@ -143,7 +143,7 @@ directory_t directory_open(vfs_t vfs, char * directory_path)
                     current_inode = read_inode;
                     current_dir = vfs_get_inode(vfs, current_inode);
                     free(current_dir_page_map.pages);
-                    current_dir_page_map = build_page_map(vfs, current_dir);
+                    current_dir_page_map = build_page_map(current_dir);
                 }
             }
         }
@@ -183,7 +183,7 @@ void directory_close(directory_t dir)
 
 void directory_add_directory(directory_t parent_dir, directory_t dir)
 {
-    struct page_map page_map = build_page_map(parent_dir->vfs, parent_dir->inode);
+    struct page_map page_map = build_page_map(parent_dir->inode);
 
     // can we hold the entry in the number of pages we have?
     if (parent_dir->inode->file_size < page_map.page_count * VFS_PAGE_SIZE)
@@ -299,7 +299,7 @@ directory_t directory_create(vfs_t vfs, char * directory_path)
 
 void directory_add_file(directory_t dir, file_t file)
 {
-    struct page_map page_map = build_page_map(dir->vfs, dir->inode);
+    struct page_map page_map = build_page_map(dir->inode);
 
     // can we hold the entry in the number of pages we have?
     if (dir->inode->file_size < page_map.page_count * VFS_PAGE_SIZE)
@@ -368,7 +368,7 @@ file_t file_create(vfs_t vfs, char * file_path)
     // get inode
     new_file->inode = vfs_get_inode(vfs, new_file->inode_number);
     // Reset file cursor
-    new_file->pagemap = build_page_map(vfs, new_file->inode);
+    new_file->pagemap = build_page_map(new_file->inode);
     new_file->cursor_page = 0;
     new_file->cursor_page_pos = 0;
 
@@ -471,7 +471,7 @@ file_t file_open(vfs_t vfs, char * file_path)
     }
 
     file->inode = vfs_get_inode(vfs, file->inode_number);
-    file->pagemap = build_page_map(vfs, file->inode);
+    file->pagemap = build_page_map(file->inode);
     file->cursor_page = 0;
     file->cursor_page_pos = 0;
 
