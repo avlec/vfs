@@ -208,8 +208,26 @@ uint16_t vfs_allocate_new_page(vfs_t vfs)
 
 void vfs_update_inode(vfs_t vfs, inode_t inode, uint16_t inode_number)
 {
+    // TODO this so it doesn't read initial inode data everytime.
 
+    // Lookup dense index for page.
+    if(fseek(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (inode_number / 16) * 2, SEEK_SET) != 0)
+    {
+        ERR("fseek() result doesn't match requested.\r\n\t"
+            "Exiting.");
+        exit(EXIT_FAILURE);
+    }
+    uint16_t page_number = 0;
+    if(fread(&page_number, sizeof(page_number), 1, vfs->vdisk) != 1)
+    {
+        ERR("fread() result doesn't match requested.\r\n\t"
+            "Exiting.");
+        exit(EXIT_FAILURE);
+    }
+
+    vfs_add_inode_page(vfs, inode, page_number, inode_number % 16);
 }
+
 inode_t vfs_get_inode(vfs_t vfs, int16_t inode_number)
 {
     inode_t inode = (inode_t) malloc(sizeof(struct inode));
