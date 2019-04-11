@@ -225,21 +225,20 @@ void directory_add_file(directory_t dir, file_t file)
     if (dir->inode->file_size < page_map.page_count * VFS_PAGE_SIZE)
     {
         // we got room
-        if(fseek(dir->vfs->vdisk, page_map.pages[page_map.page_count - 1] * VFS_PAGE_SIZE + (dir->inode->file_size / 32) % 16, SEEK_SET) != 0)
+        // write the directory entry with the inode number and file name
+        if(fseek(dir->vfs->vdisk, page_map.pages[page_map.page_count - 1] * VFS_PAGE_SIZE + dir->inode->file_size, SEEK_SET) != 0)
         {
             ERR("fseek() result doesn't match requested.\r\n\t"
                 "Exiting.");
             exit(EXIT_FAILURE);
         }
-
         if(fwrite(&file->inode_number, sizeof(file->inode_number), 1, dir->vfs->vdisk) != 1)
         {
             ERR("fwrite() result doesn't match requested.\r\n\t"
                 "Exiting");
             exit(EXIT_FAILURE);
         }
-
-        if(fwrite(file->name, sizeof(*file->name), 30, dir->vfs->vdisk) != 1)
+        if(fwrite(file->name, sizeof(*file->name), 30, dir->vfs->vdisk) != 30)
         {
             ERR("fwrite() result doesn't match requested.\r\n\t"
                 "Exiting");
@@ -250,8 +249,8 @@ void directory_add_file(directory_t dir, file_t file)
     {
         // we need room
         uint16_t new_page = vfs_allocate_new_page(dir->vfs);
-        printf("KILL ME%d\r\n", page_map.pages[page_map.page_count - 1]);
-        if(fseek(dir->vfs->vdisk, page_map.pages[page_map.page_count - 1] * VFS_PAGE_SIZE + (dir->inode->file_size / 32) % 16, SEEK_SET) != 0)
+
+        if(fseek(dir->vfs->vdisk, new_page * VFS_PAGE_SIZE + (dir->inode->file_size / 32) % 16, SEEK_SET) != 0)
         {
             ERR("fseek() result doesn't match requested.\r\n\t"
                 "Exiting.");
@@ -299,7 +298,7 @@ file_t file_create(vfs_t vfs, char * file_path)
     // Initialize '\0' filled strings so we can copy to them and not worry about adding
     // a single '\0' at the end
     new_file->name = (char *) calloc(31, sizeof(char));
-    char * directory_path = (char *) calloc(string_length, sizeof(char));
+    char * absolute_path = (char *) calloc(string_length, sizeof(char));
 
 
     // find index of last `/`
@@ -318,23 +317,25 @@ file_t file_create(vfs_t vfs, char * file_path)
         }
     }
 
-    memcpy(directory_path, file_path, last_slash);
+    memcpy(absolute_path, file_path, last_slash);
     memcpy(new_file->name, file_path+last_slash, string_length - last_slash);
 
-    printf("file_path %s, directory path %s, file_name %s\r\n", new_file->path, directory_path, new_file->name);
+    printf("file_path %s, directory path %s, file_name %s\r\n", new_file->path, absolute_path, new_file->name);
 
     // add directory entry
-    directory_t dir = directory_open(vfs, directory_path);
+    directory_t parent_dir = directory_open(vfs, absolute_path);
 
-    directory_add(dir, new_file);
+    directory_add_file(parent_dir, new_file);
 
-    directory_close(dir);
+    directory_close(parent_dir);
     return new_file;
 }
 
-void file_open(vfs_t vfs, char * filepath)
+file_t file_open(vfs_t vfs, char * filepath)
 {
+    file_t file = (file_t) malloc(sizeof(struct file));
 
+    return file;
 }
 
 void file_close(file_t file)
@@ -361,8 +362,9 @@ void file_close(file_t file)
 int main() {
     vfs_t vfs = vfs_open("vdisk.img");
 
+    directory_close(directory_create(vfs, "/home"));
     file_close(file_create(vfs, "/avlec"));
-    file_close(file_create(vfs, "/avlec"));
+    file_close(file_create(vfs, "/alec"));
 
     vfs_close(vfs);
     return EXIT_SUCCESS;
