@@ -512,7 +512,33 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
     return 0;
 }
 
+// NOTE all pages of the file are read into memory.
 size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file)
 {
-    return 0;
+    uint8_t page_contents[file->pagemap.page_count * VFS_PAGE_SIZE];
+    for(int i = 0; i < file->pagemap.page_count; ++i)
+    {
+        if (fseek(file->vfs->vdisk, file->pagemap.pages[i] * VFS_PAGE_SIZE, SEEK_SET) != 0)
+        {
+            ERR("fseek() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+        if(fread(page_contents + VFS_PAGE_SIZE * i, sizeof(*page_contents), VFS_PAGE_SIZE, file->vfs->vdisk) != VFS_PAGE_SIZE)
+        {
+            ERR("fread() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    size_t copying_byte_count = ((elem_size * num_elems) < file->inode->file_size) ? elem_size * num_elems : file->inode->file_size;
+
+    printf("Read in %d pages in file_read, copying %d of %d bytes.\r\n", file->pagemap.page_count, copying_byte_count, file->inode->file_size);
+
+    if(copying_byte_count > 0)
+        memcpy(buffer, page_contents, copying_byte_count);
+
+    // Now we have a contiguous section of storage in page_contents
+    return copying_byte_count;
 }
