@@ -83,10 +83,21 @@ directory_t directory_open(vfs_t vfs, char * path)
 void directory_close(directory_t dir)
 {
     dir->vfs = NULL;
+
+    if(dir->inode != NULL)
+        free(dir->inode);
+    dir->inode = NULL;
+    
     dir->inode_number = 0;
-    free(dir->inode);
-    free(dir->name);
-    free(dir->path);
+
+    if(dir->name != NULL)
+        free(dir->name);
+    dir->name = NULL;
+
+    if(dir->path != NULL)
+        free(dir->path);
+    dir->path = NULL;
+
     free(dir);
 }
 
@@ -213,10 +224,21 @@ void file_open(vfs_t vfs, char * filepath)
 void file_close(file_t file)
 {
     file->vfs = NULL;
-    free(file->name);
+
+    if(file->name != NULL)
+        free(file->name);
+    file->name = NULL;
+
     file->inode_number = 0;
-    free(file->inode);
-    free(file->path);
+
+    if(file->inode != NULL)
+        free(file->inode);
+    file->inode = NULL;
+
+    if(file->path != NULL)
+        free(file->path);
+    file->path = NULL;
+
     free(file);
 }
 
