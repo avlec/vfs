@@ -87,7 +87,7 @@ void directory_close(directory_t dir)
     if(dir->inode != NULL)
         free(dir->inode);
     dir->inode = NULL;
-    
+
     dir->inode_number = 0;
 
     if(dir->name != NULL)
@@ -101,7 +101,123 @@ void directory_close(directory_t dir)
     free(dir);
 }
 
-void directory_add(directory_t dir, file_t file)
+void directory_add_directory(directory_t parent_dir, directory_t dir)
+{
+    struct page_map page_map = build_page_map(parent_dir->vfs, parent_dir->inode);
+
+    // can we hold the entry in the number of pages we have?
+    if (parent_dir->inode->file_size < page_map.page_count * VFS_PAGE_SIZE)
+    {
+        // we got room
+        // write the directory entry with the inode number and file name
+        if(fseek(parent_dir->vfs->vdisk, page_map.pages[page_map.page_count - 1] * VFS_PAGE_SIZE + parent_dir->inode->file_size, SEEK_SET) != 0)
+        {
+            ERR("fseek() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+        if(fwrite(&dir->inode_number, sizeof(dir->inode_number), 1, parent_dir->vfs->vdisk) != 1)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+        if(fwrite(dir->name, sizeof(*dir->name), 30, parent_dir->vfs->vdisk) != 30)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        // we need room
+        uint16_t new_page = vfs_allocate_new_page(parent_dir->vfs);
+
+        if(fseek(parent_dir->vfs->vdisk, new_page * VFS_PAGE_SIZE + (parent_dir->inode->file_size / 32) % 16, SEEK_SET) != 0)
+        {
+            ERR("fseek() result doesn't match requested.\r\n\t"
+                "Exiting.");
+            exit(EXIT_FAILURE);
+        }
+
+        if(fwrite(&dir->inode_number, sizeof(dir->inode_number), 1, parent_dir->vfs->vdisk) != 1)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+
+
+        if(fwrite(dir->name, sizeof(*dir->name), 30, parent_dir->vfs->vdisk) != 30)
+        {
+            ERR("fwrite() result doesn't match requested.\r\n\t"
+                "Exiting");
+            exit(EXIT_FAILURE);
+        }
+
+        parent_dir->inode->d_pages[parent_dir->inode->file_size / 16] = new_page;
+    }
+
+    parent_dir->inode->file_size += 32;
+    vfs_update_inode(parent_dir->vfs, parent_dir->inode, parent_dir->inode_number);
+}
+
+directory_t directory_create(vfs_t vfs, char * directory_path)
+{
+    directory_t dir = (directory_t) malloc(sizeof(struct directory));
+    dir->vfs = vfs;
+    // create and store new inode
+    dir->inode_number =  vfs_new_file_inode(vfs);
+    // get inode
+    dir->inode = vfs_get_inode(vfs, dir->inode_number);
+
+    // parse filepath
+    // build directory path
+    // get filename
+    size_t string_length = strlen(directory_path) + 1;
+    dir->path = (char *) malloc(sizeof(char) * string_length);
+    memcpy(dir->path, directory_path, string_length);
+
+    // Initialize '\0' filled strings so we can copy to them and not worry about adding
+    // a single '\0' at the end
+    dir->name = (char *) calloc(31, sizeof(char));
+    char * absolute_path = (char *) calloc(string_length, sizeof(char));
+
+
+    // find index of last `/`
+    int last_slash = -1;
+    for(int i = 0; i < string_length - 1; ++i)
+    {
+        if (directory_path[i] == '/') {
+            // This ignores slashes with multiple `/`'s in a row
+            if (i != 0)
+                if (directory_path[i - 1] == '/')
+                    continue;
+            if (i != string_length - 1)
+                if (directory_path[i + 1] == '/')
+                    continue;
+            last_slash = i + 1;
+        }
+    }
+
+    memcpy(absolute_path, directory_path, last_slash);
+    memcpy(dir->name, directory_path+last_slash, string_length - last_slash);
+
+    printf("strlen %d, last slash %d\r\n", string_length, last_slash);
+    printf("file_path %s, directory path %s, file_name %s\r\n", dir->path, absolute_path, dir->name);
+
+    // add directory entry
+    directory_t parent_dir = directory_open(vfs, absolute_path);
+
+    directory_add_directory(parent_dir, dir);
+
+    directory_close(parent_dir);
+
+    return dir;
+}
+
+void directory_add_file(directory_t dir, file_t file)
 {
     struct page_map page_map = build_page_map(dir->vfs, dir->inode);
 
