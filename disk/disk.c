@@ -260,8 +260,8 @@ uint16_t vfs_new_inode(vfs_t vfs, int32_t flags)
             .file_size = 0,
             .file_flags = flags,
             .d_pages = {},
-            .si_pages = 0,
-            .di_pages = 0
+            .si_page = 0,
+            .di_page = 0
     };
 
     // Adding new page or adding to exisiting page?
@@ -382,14 +382,3 @@ void vfs_close(vfs_t vfs)
     fclose(vfs->vdisk);
     free(vfs);
 }
-
-/*
-int main() {
-    vfs_t vfs = vfs_open("vdisk.img");
-
-
-
-    vfs_close(vfs);
-    exit(EXIT_SUCCESS);
-}
-*/

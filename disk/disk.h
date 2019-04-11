@@ -51,8 +51,8 @@ struct inode {
     uint32_t file_size;
     uint32_t file_flags;
     uint16_t d_pages[10];
-    uint16_t si_pages;
-    uint16_t di_pages;
+    uint16_t si_page;
+    uint16_t di_page;
 };
 typedef struct inode * inode_t;
 
