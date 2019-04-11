@@ -43,7 +43,32 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
 
     if (page_map.page_count > 10)
     {
-        // TODO add all single indirect pages and double indirect pages
+        // TODO add all single indirect pages and double indirect page
+
+        if (inode->si_page != 0)
+        {
+            // read in si page.
+            for(uint16_t d_page = 0; d_page < 256; ++d_page)
+            {
+                // add each direct page number (if it's not zero)
+            }
+
+        }
+
+        if (inode->di_page != 0) {
+            // read in di_page
+            for (uint16_t si_page = 0; si_page < 256; ++si_page)
+            {
+                // read each si page
+                for (uint16_t d_page = 0; d_page < 256; ++d_page)
+                {
+                    // add each direct page number (if it's not zero)
+                }
+            }
+        }
+        // read double indirect page.
+        // read each page of single indirect pages from double indirect.
+        // read direct page number from all single indirect pages.
     }
     return page_map;
 }
