@@ -32,6 +32,7 @@ void fwrite_w(void *ptr, size_t size, size_t nmemb, FILE * stream)
             "Exiting.");
         exit(EXIT_FAILURE);
     }
+
 }
 
 

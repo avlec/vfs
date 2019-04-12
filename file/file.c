@@ -515,7 +515,7 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
         file->inode->d_pages[i + file->cursor_page] = new_pages[i];
     }
     file->inode->file_size += buffer_size;
-    file->cursor_page = required_pages - 1;
+    file->cursor_page = file->inode->file_size / 512;
     file->cursor_page_pos = file->inode->file_size % VFS_PAGE_SIZE;
     free(file->pagemap.pages);
     file->pagemap = build_page_map(file->vfs, file->inode);
