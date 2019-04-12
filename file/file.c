@@ -15,7 +15,8 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
 
     size_t pages_added = 0;
 
-    for(int i = 0; i < ((pagemap.page_count < 10) ? pagemap.page_count : 10); ++i)
+    int i = 0;
+    for(i = 0; i < ((pagemap.page_count < 10) ? pagemap.page_count : 10); ++i)
     {
         pagemap.pages[pages_added++] = inode->d_pages[i];
     }
@@ -29,7 +30,8 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
 
         fread_w(si_buffer, sizeof(*si_buffer), VFS_PAGE_SIZE / 2, vfs->vdisk);
 
-        for(uint16_t d_page = 0; d_page < pagemap.page_count - 10 && d_page < 256; ++d_page)
+        uint16_t d_page = 0;
+        for(d_page = 0; d_page < pagemap.page_count - 10 && d_page < 256; ++d_page)
         {
             // add each direct page number (if it's not zero)
             //printf("build page map si_dpage %d\r\n", si_buffer[d_page]);
@@ -44,14 +46,16 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
         fseek_w(vfs->vdisk, inode->di_page * VFS_PAGE_SIZE, SEEK_SET);
         fread_w(si_pages, sizeof(*si_pages), VFS_PAGE_SIZE / 2, vfs->vdisk);
 
-        for (uint16_t si_page = 0; si_page < 256 && !done; ++si_page)
+        uint16_t si_page = 0;
+        for (si_page = 0; si_page < 256 && !done; ++si_page)
         {
             // read in si page.
             uint16_t d_pages[VFS_PAGE_SIZE / 2] = {};
             fseek_w(vfs->vdisk, si_pages[si_page] * VFS_PAGE_SIZE, SEEK_SET);
             fread_w(d_pages, sizeof(*d_pages), VFS_PAGE_SIZE / 2, vfs->vdisk);
 
-            for(uint16_t d_page = 0; d_page < 256 && !done; ++d_page)
+            uint16_t d_page = 0;
+            for(d_page = 0; d_page < 256 && !done; ++d_page)
             {
                 // add each direct page number (if it's not zero)
                 memcpy(&pagemap.pages[pages_added++], &d_pages[d_page], sizeof(*pagemap.pages));
@@ -72,10 +76,12 @@ uint16_t directory_get_inode_number(directory_t dir, char *entry_name)
     // create a page map.
     struct page_map pagemap = build_page_map(dir->vfs, dir->inode);
 
-    for(int i = 0; i < pagemap.page_count; ++i) {
+    int i = 0;
+    for(i = 0; i < pagemap.page_count; ++i) {
         fseek_w(dir->vfs->vdisk, pagemap.pages[i] * VFS_PAGE_SIZE, SEEK_SET);
 
-        for(int j = 0; j < 16; ++j) {
+        int j = 0;
+        for(j = 0; j < 16; ++j) {
             uint16_t read_inode = 0;
             char  name[31] = {};
             fread_w(&read_inode, sizeof(read_inode), 1, dir->vfs->vdisk);
@@ -112,12 +118,14 @@ directory_t directory_open(vfs_t vfs, char * directory_path)
         bool found = false;
 
         // search in the pages of current_dir for
-        for(int i = 0; i < current_dir_page_map.page_count && !found; ++i) {
+        int i = 0;
+        for(i = 0; i < current_dir_page_map.page_count && !found; ++i) {
             // Read page at pages[i]
             fseek_w(vfs->vdisk, current_dir_page_map.pages[i] * VFS_PAGE_SIZE, SEEK_SET);
 
             // read each entry in the page.
-            for(int j = 0; j < 16 && !found; ++j)
+            int j = 0;
+            for(j = 0; j < 16 && !found; ++j)
             {
                 uint16_t read_inode = 0;
                 char  name[31] = {};
@@ -223,7 +231,8 @@ directory_t directory_create(vfs_t vfs, char * directory_path)
 
     // find index of last `/`
     int last_slash = -1;
-    for(int i = 0; i < string_length - 1; ++i)
+    int i = 0;
+    for(i = 0; i < string_length - 1; ++i)
     {
         if (directory_path[i] == '/') {
             // This ignores slashes with multiple `/`'s in a row
@@ -314,7 +323,8 @@ file_t file_create(vfs_t vfs, char * file_path)
 
     // find index of last `/`
     int last_slash = -1;
-    for(int i = 0; i < string_length - 1; ++i)
+    int i = 0;
+    for(i = 0; i < string_length - 1; ++i)
     {
         if (file_path[i] == '/') {
             // This ignores slashes with multiple `/`'s in a row
@@ -366,7 +376,8 @@ file_t file_open(vfs_t vfs, char * file_path)
 
     // find index of last `/`
     int last_slash = -1;
-    for(int i = 0; i < string_length - 1; ++i)
+    int i = 0;
+    for(i = 0; i < string_length - 1; ++i)
     {
         if (file_path[i] == '/') {
             // This ignores slashes with multiple `/`'s in a row
@@ -469,7 +480,8 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
                           + (((new_buffer_size % VFS_PAGE_SIZE) == 0) ? 0 : 1);
     size_t buffer_remaining = new_buffer_size;
 
-    for (int i = 0; i < required_pages; ++i)
+    int i = 0;
+    for (i = 0; i < required_pages; ++i)
     {
         if(file->cursor_page > 0xFFFF)
         {
@@ -557,7 +569,8 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
 size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file)
 {
     uint8_t page_contents[file->pagemap.page_count * VFS_PAGE_SIZE];
-    for(int i = 0; i < file->pagemap.page_count; ++i)
+    int i = 0;
+    for(i = 0; i < file->pagemap.page_count; ++i)
     {
         fseek_w(file->vfs->vdisk, file->pagemap.pages[i] * VFS_PAGE_SIZE, SEEK_SET);
 
