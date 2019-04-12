@@ -6,6 +6,35 @@
 
 #include "disk.h"
 
+void fseek_w(FILE * file, long int offset, int whence)
+{
+    if(fseek(file, offset, whence) != 0)
+    {
+        ERR("fseek() result doesn't match requested.\r\n\t"
+            "Exiting.");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void fread_w(void *ptr, size_t size, size_t nmemb, FILE * stream)
+{
+    if(fread(ptr, size, nmemb, stream) != nmemb) {
+        ERR("fread() result doesn't match requested.\r\n\t"
+            "Exiting.");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void fwrite_w(void *ptr, size_t size, size_t nmemb, FILE * stream)
+{
+    if(fwrite(ptr, size, nmemb, stream) != nmemb) {
+        ERR("fwrite() result doesn't match requested.\r\n\t"
+            "Exiting.");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
 int8_t vfs_page_free_check(vfs_t vfs, uint16_t page_number)
 {
     // Create the bit mask
@@ -14,18 +43,11 @@ int8_t vfs_page_free_check(vfs_t vfs, uint16_t page_number)
     // Seek to free block vector location + offset
     uint16_t byte_offset = VFS_PAGE_SIZE + page_number / 8;
     // TODO check this is in proper range
-    if(fseek(vfs->vdisk, byte_offset, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-    }
+    fseek_w(vfs->vdisk, byte_offset, SEEK_SET);
+
     uint8_t byte = 0;
     // Read a single byte from the file
-    if(fread(&byte, 1, 1, vfs->vdisk) != 1) {
-        ERR("fread() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fread_w(&byte, 1, 1, vfs->vdisk);
 
     return byte & byte_mask;
 }
@@ -35,7 +57,7 @@ int8_t vfs_page_free_check(vfs_t vfs, uint16_t page_number)
  *
  * @param vfs: file system which the operation executes on.
  * @param page_number: the page number which is being marked as non-free
- * @param marking_used: true  indicates bit is being set to 0
+ * @param marking_as_used: true  indicates bit is being set to 0
  *                      false indicates bit is being set to 1
  *
  * Macros with defines have been provided to make usage easier, and increase
@@ -48,40 +70,23 @@ void vfs_page_free_modify(vfs_t vfs, uint16_t page_number, bool marking_as_used)
     // Seek to free block vector location + offset
     uint16_t byte_offset = VFS_PAGE_SIZE + page_number / 8;
     // TODO check this is in proper range
-    if(fseek(vfs->vdisk, byte_offset, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, byte_offset, SEEK_SET);
+
     uint8_t byte;
     // Read a single byte from the file
-    if(fread(&byte, 1, 1, vfs->vdisk) != 1) {
+    fread_w(&byte, 1, 1, vfs->vdisk);
 
-        ERR("fread() result doesn't match requested.\r\n\t"
-            "Exiting");
-        exit(EXIT_FAILURE);
-    }
+    //byte = (marking_as_used ? (byte ^ byte_mask) : (byte | (uint8_t)~byte_mask));
+    byte = byte ^ byte_mask;
 
-    byte = marking_as_used ? byte ^ byte_mask : byte | (uint8_t)~byte_mask;
+    fseek_w(vfs->vdisk, byte_offset, SEEK_SET);
 
-    if(fseek(vfs->vdisk, byte_offset, SEEK_SET) != 0){
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting");
-        exit(EXIT_FAILURE);
-    }
-
-    if(fwrite(&byte, 1, 1, vfs->vdisk) != 1)
-    {
-        ERR("fwrite() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fwrite_w(&byte, 1, 1, vfs->vdisk);
 }
 
 /*
  * @brief Writes the contents of the buffer to page page_number
- */
+
 void vfs_page_write(vfs_t vfs, uint16_t page_number, int8_t * buffer, int16_t buffer_size)
 {
     // Buffer size checking.
@@ -105,23 +110,15 @@ void vfs_page_write(vfs_t vfs, uint16_t page_number, int8_t * buffer, int16_t bu
         exit(EXIT_FAILURE);
     }
 }
+ */
 
 struct inode vfs_get_inode_page(vfs_t vfs, uint16_t page_number, uint16_t page_index)
 {
     struct inode inode;
     // TODO check page_number and page_index is in proper range
-    if(fseek(vfs->vdisk, page_number * VFS_PAGE_SIZE + page_index * 32, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    if(fread(&inode, sizeof(inode), 1, vfs->vdisk) != 1)
-    {
-        ERR("fwrite() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, page_number * VFS_PAGE_SIZE + page_index * 32, SEEK_SET);
+
+    fread_w(&inode, sizeof(inode), 1, vfs->vdisk);
     return inode;
 }
 
@@ -131,18 +128,8 @@ struct inode vfs_get_inode_page(vfs_t vfs, uint16_t page_number, uint16_t page_i
 void vfs_add_inode_page(vfs_t vfs, inode_t inode, uint16_t page_number, uint16_t page_index)
 {
     // TODO check page_number and page_index is in proper range
-    if(fseek(vfs->vdisk, page_number * VFS_PAGE_SIZE + page_index * 32, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    if(fwrite(inode, sizeof(*inode), 1, vfs->vdisk) != 1)
-    {
-        ERR("fwrite() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, page_number * VFS_PAGE_SIZE + page_index * 32, SEEK_SET);
+    fwrite_w(inode, sizeof(*inode), 1, vfs->vdisk);
 }
 
 
@@ -155,18 +142,8 @@ void vfs_add_inode_page(vfs_t vfs, inode_t inode, uint16_t page_number, uint16_t
 uint16_t vfs_allocate_new_page(vfs_t vfs)
 {
     uint8_t fbv_contents[VFS_PAGE_SIZE];
-    if(fseek(vfs->vdisk, VFS_FREE_BLOCK_VECTOR_PAGE_OFFSET, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    if(fread(fbv_contents, sizeof(*fbv_contents), sizeof(fbv_contents), vfs->vdisk) != sizeof(fbv_contents))
-    {
-        ERR("fread() result doesn't match requested.\r\n\t"
-            "Exiting");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, VFS_FREE_BLOCK_VECTOR_PAGE_OFFSET, SEEK_SET);
+    fread_w(fbv_contents, sizeof(*fbv_contents), sizeof(fbv_contents), vfs->vdisk);
 
     // Iterate through the bytes in the free block vector
     int first_free_blocks = 0;
@@ -189,19 +166,10 @@ uint16_t vfs_allocate_new_page(vfs_t vfs)
     vfs_page_free_mark(vfs, allocated_page_index);
 
     // populate page with zeros
-    if(fseek(vfs->vdisk, allocated_page_index * VFS_PAGE_SIZE, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    uint8_t zeros[VFS_PAGE_SIZE] = {};
-    if(fwrite(zeros, sizeof(*zeros), sizeof(zeros), vfs->vdisk) != sizeof(zeros))
-    {
-        ERR("fwrite() result doesn't match requested.\r\n\t"
-            "Exiting");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, allocated_page_index * VFS_PAGE_SIZE, SEEK_SET);
+    uint8_t zeros[VFS_PAGE_SIZE] = { 0xff };
+    fwrite_w(zeros, sizeof(*zeros), sizeof(zeros), vfs->vdisk);
+
 
     return allocated_page_index;
 }
@@ -211,19 +179,9 @@ void vfs_update_inode(vfs_t vfs, inode_t inode, uint16_t inode_number)
     // TODO this so it doesn't read initial inode data everytime.
 
     // Lookup dense index for page.
-    if(fseek(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (inode_number / 16) * 2, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (inode_number / 16) * 2, SEEK_SET);
     uint16_t page_number = 0;
-    if(fread(&page_number, sizeof(page_number), 1, vfs->vdisk) != 1)
-    {
-        ERR("fread() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fread_w(&page_number, sizeof(page_number), 1, vfs->vdisk);
 
     vfs_add_inode_page(vfs, inode, page_number, inode_number % 16);
 }
@@ -233,19 +191,9 @@ inode_t vfs_get_inode(vfs_t vfs, int16_t inode_number)
     inode_t inode = (inode_t) malloc(sizeof(struct inode));
 
     // query dense index.
-    if(fseek(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (inode_number / 16) * 2, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fseek_w(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (inode_number / 16) * 2, SEEK_SET);
     uint16_t page_number = 0;
-    if(fread(&page_number, sizeof(page_number), 1, vfs->vdisk) != 1)
-    {
-        ERR("fread() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
+    fread_w(&page_number, sizeof(page_number), 1, vfs->vdisk);
 
     // visit page pointed to by dense index
     // go to inode offset on page
@@ -273,34 +221,14 @@ uint16_t vfs_new_inode(vfs_t vfs, int32_t flags)
         page_number = vfs_allocate_new_page(vfs);
 
         // Add dense index to page.
-        if(fseek(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (vfs->inodes / 16) * 2, SEEK_SET) != 0)
-        {
-            ERR("fseek() result doesn't match requested.\r\n\t"
-                "Exiting.");
-            exit(EXIT_FAILURE);
-        }
-        if(fwrite(&page_number, sizeof(page_number), 1, vfs->vdisk) != 1)
-        {
-            ERR("fwrite() result doesn't match requested.\r\n\t"
-                "Exiting.");
-            exit(EXIT_FAILURE);
-        }
+        fseek_w(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (vfs->inodes / 16) * 2, SEEK_SET);
+        fwrite_w(&page_number, sizeof(page_number), 1, vfs->vdisk);
     }
     else {
         // Lookup dense index for page.
-        if(fseek(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (vfs->inodes / 16) * 2, SEEK_SET) != 0)
-        {
-            ERR("fseek() result doesn't match requested.\r\n\t"
-                "Exiting.");
-            exit(EXIT_FAILURE);
-        }
+        fseek_w(vfs->vdisk, VFS_RESERVED_PAGES_START_OFFSET + (vfs->inodes / 16) * 2, SEEK_SET);
 
-        if(fread(&page_number, sizeof(page_number), 1, vfs->vdisk) != 1)
-        {
-            ERR("fread() result doesn't match requested.\r\n\t"
-                "Exiting.");
-            exit(EXIT_FAILURE);
-        }
+        fread_w(&page_number, sizeof(page_number), 1, vfs->vdisk);
     }
 
     vfs_add_inode_page(vfs, &new_inode, page_number, page_index);
@@ -342,17 +270,6 @@ void vfs_create(vfs_t vfs)
     }
 
     vfs_new_inode(vfs, VFS_NEW_DIRECTORY_FLAGS);
-}
-
-
-// TODO move to ../file/file.c
-int vfs_write(const void * ptr, size_t size, size_t nmemb, vfs_t vfs)
-{
-
-}
-char * vfs_read(void * ptr, size_t size, size_t nmemb, vfs_t vfs)
-{
-    return NULL;
 }
 
 vfs_t vfs_open(const char * vdisk)

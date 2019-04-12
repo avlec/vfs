@@ -31,6 +31,10 @@
 
 #define ERR(x) fprintf(stderr, "Error in %s at line %d in %s:\r\n\t%s\r\n", __func__, __LINE__, __FILE__, x)
 
+void fseek_w(FILE * file, long int offset, int whence);
+void fread_w(void *ptr, size_t size, size_t nmemb, FILE * stream);
+void fwrite_w(void *ptr, size_t size, size_t nmemb, FILE * stream);
+
 struct vfs {
     FILE * vdisk;
     char magic_number[4];
@@ -66,7 +70,7 @@ static inline void vfs_page_free_unmark(vfs_t vfs, uint16_t page_number)
     vfs_page_free_modify(vfs, page_number, false);
 }
 
-void vfs_page_write(vfs_t vfs, uint16_t page_number, int8_t * buffer, int16_t buffer_size);
+//void vfs_page_write(vfs_t vfs, uint16_t page_number, int8_t * buffer, int16_t buffer_size);
 
 void vfs_add_inode_page(vfs_t vfs, inode_t inode, uint16_t page_number, uint16_t page_index);
 

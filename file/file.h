@@ -38,6 +38,10 @@ file_t file_create(vfs_t vfs, char * file_path);
 file_t file_open(vfs_t vfs, char * filepath);
 size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file);
 size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file);
+#define VFS_SEEK_SET 0b00000001
+#define VFS_SEEK_CUR 0b00000010
+#define VFS_SEEK_END 0b00000100
+size_t file_seek(file_t file, uint32_t offset, uint8_t mode);
 size_t file_rewind(file_t avlec);
 void file_close(file_t file);
 

@@ -7,6 +7,9 @@
       <w>fwrite</w>
       <w>inode</w>
       <w>inodes</w>
+      <w>pagemap</w>
+      <w>printf</w>
+      <w>strlen</w>
       <w>vdisk</w>
     </words>
   </dictionary>

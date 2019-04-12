@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "../file/file.h"
 
@@ -12,13 +13,24 @@ int main() {
 
     file_t avlec = file_open(vfs, "/home/avlec");
 
-    char buffer1[512] = "this is garbage";
-    file_write(buffer1, sizeof(*buffer1), sizeof(buffer1)/sizeof(*buffer1), avlec);
+    char buffer1[512] = "this is garbage!";
+    for(int i = 0; i < 1; ++i)
+    {
+        file_write(buffer1, sizeof(*buffer1), strlen(buffer1), avlec);
+    }
 
+
+    printf("pages %d\r\n", avlec->pagemap.page_count);
+
+    /*
     file_rewind(avlec);
 
-    char buffer2 [512] = {};
-    file_read(buffer2, sizeof(*buffer2), sizeof(buffer2)/sizeof(*buffer2), avlec);
+    char buffer2 [12] = {};
+    file_read(buffer2, sizeof(*buffer2), sizeof(buffer2)-1, avlec);
+
+    printf("file_contents: {\r\n%s\r\n}\r\n", buffer2);
+
+     */
 
     file_close(avlec);
 
