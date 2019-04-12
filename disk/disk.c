@@ -18,7 +18,8 @@ void fseek_w(FILE * file, long int offset, int whence)
 
 void fread_w(void *ptr, size_t size, size_t nmemb, FILE * stream)
 {
-    if(fread(ptr, size, nmemb, stream) != nmemb) {
+    long x = 0;
+    if((x = fread(ptr, size, nmemb, stream)) != nmemb) {
         ERR("fread() result doesn't match requested.\r\n\t"
             "Exiting.");
         exit(EXIT_FAILURE);
@@ -168,7 +169,7 @@ uint16_t vfs_allocate_new_page(vfs_t vfs)
 
     // populate page with zeros
     fseek_w(vfs->vdisk, allocated_page_index * VFS_PAGE_SIZE, SEEK_SET);
-    uint8_t zeros[VFS_PAGE_SIZE] = { 0xff };
+    uint8_t zeros[VFS_PAGE_SIZE] = {};
     fwrite_w(zeros, sizeof(*zeros), sizeof(zeros), vfs->vdisk);
 
 

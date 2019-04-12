@@ -13,9 +13,11 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
 
     //printf("page map for %d pages\r\n", pagemap.page_count);
 
+    size_t pages_added = 0;
+
     for(int i = 0; i < ((pagemap.page_count < 10) ? pagemap.page_count : 10); ++i)
     {
-        pagemap.pages[i] = inode->d_pages[i];
+        pagemap.pages[pages_added++] = inode->d_pages[i];
     }
 
     // TODO add all single indirect pages and double indirect page
@@ -27,30 +29,34 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
 
         fread_w(si_buffer, sizeof(*si_buffer), VFS_PAGE_SIZE / 2, vfs->vdisk);
 
-        for(uint16_t d_page = 0; d_page < pagemap.page_count - 10; ++d_page)
+        for(uint16_t d_page = 0; d_page < pagemap.page_count - 10 && d_page < 256; ++d_page)
         {
             // add each direct page number (if it's not zero)
-            printf("build page map si_dpage %d\r\n", si_buffer[d_page]);
-            memcpy(&pagemap.pages[10 + d_page], &si_buffer[d_page], sizeof(*pagemap.pages));
+            //printf("build page map si_dpage %d\r\n", si_buffer[d_page]);
+            memcpy(&pagemap.pages[pages_added++], &si_buffer[d_page], sizeof(*pagemap.pages));
         }
     }
+    // Add all double indirect pages.
+    bool done = false;
     if (inode->di_page != 0) {
         // read in di_page
-        uint16_t di_buffer[VFS_PAGE_SIZE / 2] = {};
-        fseek_w(vfs->vdisk, inode->si_page * VFS_PAGE_SIZE, SEEK_SET);
-        fread_w(di_buffer, sizeof(*di_buffer), VFS_PAGE_SIZE / 2, vfs->vdisk);
+        uint16_t si_pages[VFS_PAGE_SIZE / 2] = {};
+        fseek_w(vfs->vdisk, inode->di_page * VFS_PAGE_SIZE, SEEK_SET);
+        fread_w(si_pages, sizeof(*si_pages), VFS_PAGE_SIZE / 2, vfs->vdisk);
 
-        for (uint16_t si_page = 0; si_page < 256; ++si_page)
+        for (uint16_t si_page = 0; si_page < 256 && !done; ++si_page)
         {
             // read in si page.
-            uint16_t si_buffer[VFS_PAGE_SIZE / 2] = {};
-            fseek_w(vfs->vdisk, di_buffer[si_page] * VFS_PAGE_SIZE, SEEK_SET);
-            fread_w(si_buffer, sizeof(*si_buffer), VFS_PAGE_SIZE / 2, vfs->vdisk);
+            uint16_t d_pages[VFS_PAGE_SIZE / 2] = {};
+            fseek_w(vfs->vdisk, si_pages[si_page] * VFS_PAGE_SIZE, SEEK_SET);
+            fread_w(d_pages, sizeof(*d_pages), VFS_PAGE_SIZE / 2, vfs->vdisk);
 
-            for(uint16_t d_page = 0; d_page < pagemap.page_count - 10 - 256 - 256*si_page; ++d_page)
+            for(uint16_t d_page = 0; d_page < 256 && !done; ++d_page)
             {
                 // add each direct page number (if it's not zero)
-                memcpy(&pagemap.pages[10 + 256 + 256*si_page + d_page], &si_buffer[d_page], sizeof(*pagemap.pages));
+                memcpy(&pagemap.pages[pages_added++], &d_pages[d_page], sizeof(*pagemap.pages));
+                if(pages_added == pagemap.page_count)
+                    done = true;
             }
         }
     }
@@ -428,142 +434,123 @@ void file_close(file_t file)
 
 size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file)
 {
-    // amount of data in page + elem_size * num_elems
-    // compare page count to what page the cursor is looking at
     size_t buffer_size = elem_size * num_elems;
 
-    // if the cursor is at the start of the next page
-    // we don't need to account for an existing page
-    if (file->cursor_page == file->pagemap.page_count)
+    uint32_t file_page_count = file->inode->file_size / 512;
+    uint32_t file_end_offset = file->inode->file_size % VFS_PAGE_SIZE;
+
+    //printf("buffer of %d, file with %d pages, hangoff of %d\r\n", buffer_size, file_page_count, file_end_offset);
+
+    // assume the cursor is at the end of the file.
+    file->cursor_page = file_page_count;
+    file->cursor_page_pos = file_end_offset;
+
+    file->inode->file_size -= file->cursor_page_pos;
+
+    size_t new_buffer_size = file->cursor_page_pos + buffer_size;
+    uint8_t new_buffer[new_buffer_size];
+
+    if(file->cursor_page_pos != 0)
     {
-        // all new data.
-
-        // check if the data fits the page perfectly or needs another page to hold the bits
-        size_t required_pages = (buffer_size / VFS_PAGE_SIZE) + ((buffer_size % VFS_PAGE_SIZE == 0) ? 0 : 1);
-
-        uint16_t new_pages[required_pages];
-        for(int i = 0; i < required_pages; ++i)
-        {
-            new_pages[i] = vfs_allocate_new_page(file->vfs);
-
-            // write to page while here.
-            fseek_w(file->vfs->vdisk, new_pages[i] * VFS_PAGE_SIZE, SEEK_SET);
-
-            size_t write_amount = ((buffer_size - VFS_PAGE_SIZE * i < VFS_PAGE_SIZE) ? buffer_size - VFS_PAGE_SIZE * i : VFS_PAGE_SIZE);
-            fwrite_w(buffer + i * VFS_PAGE_SIZE, 1, write_amount, file->vfs->vdisk);
-        }
-
-        // update inode
-        for(int i = file->cursor_page; i < 10 && i < required_pages + file->cursor_page; ++i)
-        {
-            printf("adding %d: %d\r\n", i, new_pages[i - file->cursor_page]);
-            file->inode->d_pages[i] = new_pages[i - file->cursor_page];
-        }
-
-
-
-        file->inode->file_size += buffer_size;
-        file->cursor_page = file->inode->file_size / VFS_PAGE_SIZE;
-        file->cursor_page_pos = file->inode->file_size % VFS_PAGE_SIZE;
-        free(file->pagemap.pages);
-        file->pagemap = build_page_map(file->vfs, file->inode);
-
-
-        vfs_update_inode(file->vfs, file->inode, file->inode_number);
-
-        return num_elems;
+        //printf("Preserving existing data in current block.\r\n");
+        fseek_w(file->vfs->vdisk, file->pagemap.pages[file->cursor_page] * VFS_PAGE_SIZE, SEEK_SET);
+        size_t readme = ftell(file->vfs->vdisk);
+        fread_w(new_buffer, sizeof(*new_buffer), file->cursor_page_pos, file->vfs->vdisk);
+        vfs_page_free_unmark(file->vfs, file->pagemap.pages[file->cursor_page]);
+        memcpy(new_buffer + file->cursor_page_pos, buffer, buffer_size);
+    }
+    else
+    {
+        //printf("No existing data in current block.\r\n");
+        memcpy(new_buffer, buffer, buffer_size);
     }
 
-    // preserve data in unfilled block.
+    size_t required_pages = (new_buffer_size) / VFS_PAGE_SIZE \
+                          + (((new_buffer_size % VFS_PAGE_SIZE) == 0) ? 0 : 1);
+    size_t buffer_remaining = new_buffer_size;
 
-    // copy contents of old block out
-    uint32_t old_page_number = file->pagemap.pages[file->pagemap.page_count - 1];
-    uint16_t old_page_size = file->inode->file_size % VFS_PAGE_SIZE;
-    uint8_t old_page[old_page_size];
-
-    fseek_w(file->vfs->vdisk, old_page_number * VFS_PAGE_SIZE, SEEK_SET);
-
-    fread_w(old_page, sizeof(*old_page), old_page_size, file->vfs->vdisk);
-
-    // mark it as free
-    vfs_page_free_unmark(file->vfs, old_page_number);
-
-    // allocate new blocks and write old and new data
-    size_t required_pages = ((buffer_size + old_page_size) / VFS_PAGE_SIZE);
-    required_pages += (((buffer_size + old_page_size) % VFS_PAGE_SIZE == 0) ? 0 : 1);
-
-    int16_t new_pages[required_pages];
-    new_pages[0] = vfs_allocate_new_page(file->vfs);
-
-    fseek_w(file->vfs->vdisk, new_pages[0] * VFS_PAGE_SIZE, SEEK_SET);
-
-    fwrite_w(old_page, sizeof(*old_page), old_page_size, file->vfs->vdisk);
-
-    size_t write_amount = (VFS_PAGE_SIZE - old_page_size < buffer_size) ? VFS_PAGE_SIZE - old_page_size : buffer_size;
-    size_t buffer_remaining = buffer_size - write_amount;
-
-    fwrite_w(buffer, 1, write_amount, file->vfs->vdisk);
-
-    for(int i = 1; i < required_pages; ++i)
+    for (int i = 0; i < required_pages; ++i)
     {
-        new_pages[i] = vfs_allocate_new_page(file->vfs);
-        fseek_w(file->vfs->vdisk, new_pages[i] * VFS_PAGE_SIZE, SEEK_SET);
+        if(file->cursor_page > 0xFFFF)
+        {
+            printf("You've added a file too large. Please kindly go fuck yourself.\r\n");
+            exit(EXIT_FAILURE);
+        }
 
-        write_amount = (buffer_remaining > VFS_PAGE_SIZE) ? VFS_PAGE_SIZE : buffer_remaining;
+        if((file->cursor_page >= 256+10) && file->cursor_page < 0xFFFF)
+        {
+            if (file->inode->di_page == 0)
+                file->inode->di_page = vfs_allocate_new_page(file->vfs);
+
+            uint16_t si_pages[VFS_PAGE_SIZE / 2] = {};
+
+            fseek_w(file->vfs->vdisk, file->inode->di_page * VFS_PAGE_SIZE, SEEK_SET);
+            fread_w(si_pages, sizeof(*si_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+            if(si_pages[(file->cursor_page - 256 - 10) / 256] == 0)
+                si_pages[(file->cursor_page - 256 - 10) / 256] = vfs_allocate_new_page(file->vfs);
+            fseek_w(file->vfs->vdisk, file->inode->di_page * VFS_PAGE_SIZE, SEEK_SET);
+            fwrite_w(si_pages, sizeof(*si_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+        }
+
+        if(file->cursor_page >= 10 && file->cursor_page < 256+10)
+            if (file->inode->si_page == 0)
+                file->inode->si_page = vfs_allocate_new_page(file->vfs);
+
+        uint16_t new_page = vfs_allocate_new_page(file->vfs);
+        fseek_w(file->vfs->vdisk, new_page * VFS_PAGE_SIZE, SEEK_SET);
+        size_t write_amount = (buffer_remaining < VFS_PAGE_SIZE) ? buffer_remaining : VFS_PAGE_SIZE;
+        //printf("Writing %d bytes to page %d of %d.\r\n", write_amount, i, required_pages);
+        fwrite_w(new_buffer, 1, write_amount, file->vfs->vdisk);
         buffer_remaining -= write_amount;
-        fwrite_w(buffer + i * VFS_PAGE_SIZE, sizeof(*old_page), old_page_size, file->vfs->vdisk);
+        file->inode->file_size += write_amount;
+        if(file->cursor_page < 10)
+        {
+            // add it to d_pages;
+            file->inode->d_pages[file->cursor_page] = new_page;
+        }
+        else if(file->cursor_page < 256 + 10)
+        {
+            // add it to the d_pages in si_page
+            uint16_t d_pages[VFS_PAGE_SIZE / 2] = {};
+
+            fseek_w(file->vfs->vdisk, file->inode->si_page * VFS_PAGE_SIZE, SEEK_SET);
+            fread_w(d_pages, sizeof(*d_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+
+            d_pages[file->cursor_page - 10] = new_page;
+
+            fseek_w(file->vfs->vdisk, -VFS_PAGE_SIZE, SEEK_CUR);
+            fwrite_w(d_pages, sizeof(*d_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+        }
+        else
+        {
+            // read si_pages to find where si page is
+            uint16_t si_pages[VFS_PAGE_SIZE / 2] = {};
+            fseek_w(file->vfs->vdisk, file->inode->di_page * VFS_PAGE_SIZE, SEEK_SET);
+            fread_w(si_pages, sizeof(*si_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+            uint16_t si_page = si_pages[(file->cursor_page - 256 - 10) / 256];
+
+            uint16_t d_pages[VFS_PAGE_SIZE / 2] = {};
+            fseek_w(file->vfs->vdisk, si_page * VFS_PAGE_SIZE, SEEK_SET);
+            fread_w(d_pages, sizeof(*d_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+
+
+            d_pages[(file->cursor_page - 256 - 10) % 256] = new_page;
+
+            fseek_w(file->vfs->vdisk, si_page * VFS_PAGE_SIZE, SEEK_SET);
+            fwrite_w(d_pages, sizeof(*d_pages), VFS_PAGE_SIZE / 2, file->vfs->vdisk);
+
+
+        }
+        file->cursor_page++;
     }
 
-
-    // update inode
-
-    for(int i = file->cursor_page; i < 10 && i < required_pages; ++i)
-    {
-        printf("adding %d: %d\r\n", i, new_pages[i - file->cursor_page]);
-        file->inode->d_pages[i] = new_pages[i - file->cursor_page];
-    }
-
-
-
-    file->inode->file_size += buffer_size;
     file->cursor_page = file->inode->file_size / VFS_PAGE_SIZE;
     file->cursor_page_pos = file->inode->file_size % VFS_PAGE_SIZE;
+
     free(file->pagemap.pages);
     file->pagemap = build_page_map(file->vfs, file->inode);
 
     vfs_update_inode(file->vfs, file->inode, file->inode_number);
-
-    return num_elems;
-
-    /*
-    size_t required_pages =  + (buffer_size - file->cursor_page_pos);
-    uint8_t new_pages_contents[required_pages * 512];
-    uint8_t * cursor_pos = new_pages_contents + file->cursor_page_pos;
-
-    if (fseek(file->vfs->vdisk, file->pagemap.pages[file->cursor_page] * VFS_PAGE_SIZE, SEEK_SET) != 0)
-    {
-        ERR("fseek() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    if(fread(new_pages_contents, sizeof(*new_pages_contents), sizeof(new_pages_contents)/sizeof(*new_pages_contents), file->vfs->vdisk) != VFS_PAGE_SIZE)
-    {
-        ERR("fread() result doesn't match requested.\r\n\t"
-            "Exiting.");
-        exit(EXIT_FAILURE);
-    }
-
-    uint16_t new_pages[required_pages];
-    for (int i = 0; i < required_pages; ++i) {
-        new_pages[i] = vfs_allocate_new_page(file->vfs);
-    }
-
-    // read the page where the cursor is into memory if the cursor isn't pointing at the next page
-    // start updating from that page
-
-    // assuming only concatenation to files.
-    // every write always allocates new blocks on the end
-    */
 }
 
 // NOTE all pages of the file are read into memory.

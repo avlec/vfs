@@ -15,7 +15,7 @@ int main() {
 
     char buffer1[512] = "this is garbage!";
     // 320 * 256 + 1
-    for(int i = 0; i < 320; ++i)
+    for(int i = 0; i < 32 * 10 + 32 * 256 + 32 * 256; ++i)
     {
         file_write(buffer1, sizeof(*buffer1), strlen(buffer1), avlec);
     }
