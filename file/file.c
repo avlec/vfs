@@ -477,9 +477,6 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
     // preserve data in unfilled block.
 
     // copy contents of old block out
-    uint32_t prev_page_number;
-    if(file->pagemap.page_count > 1)
-        prev_page_number = file->pagemap.pages[file->pagemap.page_count - 2];
     uint32_t old_page_number = file->pagemap.pages[file->pagemap.page_count - 1];
     uint16_t old_page_size = file->inode->file_size % VFS_PAGE_SIZE;
     uint8_t old_page[old_page_size];
