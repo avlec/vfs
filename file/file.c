@@ -249,9 +249,6 @@ directory_t directory_create(vfs_t vfs, char * directory_path)
     memcpy(absolute_path, directory_path, last_slash);
     memcpy(dir->name, directory_path+last_slash, string_length - last_slash);
 
-    printf("strlen %d, last slash %d\r\n", string_length, last_slash);
-    printf("file_path %s, directory path %s, file_name %s\r\n", dir->path, absolute_path, dir->name);
-
     // add directory entry
     directory_t parent_dir = directory_open(vfs, absolute_path);
 
@@ -581,8 +578,6 @@ size_t file_read(void * buffer, size_t elem_size, size_t num_elems, file_t file)
     size_t page_contents_offset = file->cursor_page * VFS_PAGE_SIZE + file->cursor_page_pos;
     size_t page_contents_after_offset = file->inode->file_size - page_contents_offset;
     size_t copying_byte_count = ((buffer_size) < page_contents_after_offset) ? buffer_size : page_contents_after_offset;
-
-    printf("Read in %d pages in file_read, copying %d of %d bytes.\r\n", file->pagemap.page_count, copying_byte_count, file->inode->file_size);
 
     if(copying_byte_count > 0)
         memcpy(buffer, page_contents + page_contents_offset, copying_byte_count);
