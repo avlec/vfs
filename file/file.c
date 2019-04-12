@@ -338,8 +338,6 @@ file_t file_create(vfs_t vfs, char * file_path)
     memcpy(absolute_path, file_path, last_slash);
     memcpy(new_file->name, file_path+last_slash, string_length - last_slash);
 
-    printf("file_path %s, directory path %s, file_name %s\r\n", new_file->path, absolute_path, new_file->name);
-
     // add directory entry
     directory_t parent_dir = directory_open(vfs, absolute_path);
 
@@ -390,8 +388,6 @@ file_t file_open(vfs_t vfs, char * file_path)
 
     memcpy(absolute_path, file_path, last_slash);
     memcpy(file->name, file_path+last_slash, string_length - last_slash);
-
-    printf("file_path %s, directory path %s, file_name %s\r\n", file->path, absolute_path, file->name);
 
     directory_t parent_dir = directory_open(vfs, absolute_path);
 
@@ -482,7 +478,7 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
     {
         if(file->cursor_page > 0xFFFF)
         {
-            printf("You've added a file too large. Please kindly go fuck yourself.\r\n");
+            printf("You've added a file too large. Please don't do that.\r\n");
             exit(EXIT_FAILURE);
         }
 
