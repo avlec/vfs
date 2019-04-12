@@ -30,6 +30,7 @@ struct page_map build_page_map(vfs_t vfs, inode_t inode)
         for(uint16_t d_page = 0; d_page < pagemap.page_count - 10; ++d_page)
         {
             // add each direct page number (if it's not zero)
+            printf("build page map si_dpage %d\r\n", si_buffer[d_page]);
             memcpy(&pagemap.pages[10 + d_page], &si_buffer[d_page], sizeof(*pagemap.pages));
         }
     }
@@ -453,14 +454,20 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
         }
 
         // update inode
-        for(int i = 0; i < 10 && i < required_pages; ++i)
+        for(int i = file->cursor_page; i < 10 && i < required_pages + file->cursor_page; ++i)
         {
-            file->inode->d_pages[i + file->cursor_page] = new_pages[i];
+            printf("adding %d: %d\r\n", i, new_pages[i - file->cursor_page]);
+            file->inode->d_pages[i] = new_pages[i - file->cursor_page];
         }
 
+
+
         file->inode->file_size += buffer_size;
+        file->cursor_page = file->inode->file_size / VFS_PAGE_SIZE;
+        file->cursor_page_pos = file->inode->file_size % VFS_PAGE_SIZE;
         free(file->pagemap.pages);
         file->pagemap = build_page_map(file->vfs, file->inode);
+
 
         vfs_update_inode(file->vfs, file->inode, file->inode_number);
 
@@ -470,6 +477,9 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
     // preserve data in unfilled block.
 
     // copy contents of old block out
+    uint32_t prev_page_number;
+    if(file->pagemap.page_count > 1)
+        prev_page_number = file->pagemap.pages[file->pagemap.page_count - 2];
     uint32_t old_page_number = file->pagemap.pages[file->pagemap.page_count - 1];
     uint16_t old_page_size = file->inode->file_size % VFS_PAGE_SIZE;
     uint8_t old_page[old_page_size];
@@ -510,12 +520,16 @@ size_t file_write(void * buffer, size_t elem_size, size_t num_elems, file_t file
 
     // update inode
 
-    for(int i = 0; i < 10 && i < required_pages; ++i)
+    for(int i = file->cursor_page; i < 10 && i < required_pages; ++i)
     {
-        file->inode->d_pages[i + file->cursor_page] = new_pages[i];
+        printf("adding %d: %d\r\n", i, new_pages[i - file->cursor_page]);
+        file->inode->d_pages[i] = new_pages[i - file->cursor_page];
     }
+
+
+
     file->inode->file_size += buffer_size;
-    file->cursor_page = file->inode->file_size / 512;
+    file->cursor_page = file->inode->file_size / VFS_PAGE_SIZE;
     file->cursor_page_pos = file->inode->file_size % VFS_PAGE_SIZE;
     free(file->pagemap.pages);
     file->pagemap = build_page_map(file->vfs, file->inode);

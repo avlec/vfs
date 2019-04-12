@@ -14,6 +14,7 @@ int main() {
     file_t avlec = file_open(vfs, "/home/avlec");
 
     char buffer1[512] = "this is garbage!";
+    // 320 * 256 + 1
     for(int i = 0; i < 320; ++i)
     {
         file_write(buffer1, sizeof(*buffer1), strlen(buffer1), avlec);
